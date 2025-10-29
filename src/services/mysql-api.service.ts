@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost/api.php'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-ipressence.onrender.com'
 
 export interface User {
   id: number
