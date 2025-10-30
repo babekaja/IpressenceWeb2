@@ -214,7 +214,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import QRCode from 'qrcode'
+
 import AuthService from '../services/auth.service'
 import AttendanceService, { type AttendanceRecord } from '../services/attendance.service'
 import PDFService from '../services/pdf.service'
@@ -330,19 +330,37 @@ const startTimer = () => {
   }, 1000)
 }
 
+// =================================================================
+// ==== SECTION CORRIGÉE ====
+// =================================================================
 const exportPDF = async () => {
   if (!user.value || !exportCourse.value || !exportDate.value) return
   exporting.value = true
   try {
+    // 1. Trouver le cours sélectionné (objet complet) pour obtenir son nom
     const course = myCourses.value.find((c: Cours) => c.id === exportCourse.value)
+    
+    // 2. Obtenir tous les enregistrements pour la date sélectionnée
     const records = await AttendanceService.getTeacherAttendanceByDate(user.value.id, exportDate.value)
-    const filtered = records.filter((r: any) => r.sessions?.cours_id === exportCourse.value)
+
+    // 3. CORRECTION :
+    // L'ancien filtre (r.sessions?.cours_id === exportCourse.value) ne fonctionnait pas
+    // car les données de présence (que vous m'avez montrées) n'ont pas 'sessions', mais ont 'course_name'.
+    // Le filtre correct compare le nom du cours de l'enregistrement ('r.course_name')
+    // avec le titre du cours sélectionné dans le menu déroulant ('course?.titre').
+    const filtered = records.filter((r: any) => r.course_name === course?.titre)
+
+    // Log de débogage pour vérifier combien d'enregistrements sont envoyés au PDF
+    console.log(`Préparation de l'export PDF... ${filtered.length} enregistrements trouvés pour le cours ${course?.titre}.`)
+
+    // 4. Générer le PDF avec la liste maintenant correctement filtrée
     PDFService.generateAttendancePDF({
       teacherName: `${user.value.nom} ${user.value.prenom || ''}`.trim(),
       courseName: course?.titre,
       date: exportDate.value,
-      records: filtered
+      records: filtered // 'filtered' ne devrait plus être vide
     })
+    
     showSnackbar('PDF exporté avec succès!', 'success')
   } catch (error: any) {
     console.error('Export PDF error:', error)
@@ -351,6 +369,9 @@ const exportPDF = async () => {
     exporting.value = false
   }
 }
+// =================================================================
+// ==== FIN DE LA SECTION CORRIGÉE ====
+// =================================================================
 
 const formatDateTime = (dateTime: string) => new Date(dateTime).toLocaleString('fr-FR')
 
