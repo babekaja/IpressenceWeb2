@@ -136,6 +136,9 @@
                                 ></v-text-field>
                               </v-col>
 
+                              <!-- Champ 'gender' caché, il contient la valeur normalisée (M ou F) -->
+                              <input type="hidden" v-model="formData.gender" />
+
                               <v-col cols="12" md="6">
                                 <v-text-field
                                   v-model="formData.password"
@@ -219,25 +222,25 @@ const router = useRouter()
 const formRef = ref<any>(null)
 
 const step = ref(1)
-// Pré-remplissage du matricule avec votre exemple pour tester directement
-const matricule = ref('05/23.08831')
+const matricule = ref('05/23.08831') // Pré-remplissage pour test
 const loadingAkhademie = ref(false)
 const akhademieError = ref('')
-const akhademieData = ref<any>(null) // Va contenir les données de l'étudiant
+const akhademieData = ref<any>(null)
 
 const submitting = ref(false)
 const registrationError = ref('')
 const confirmPassword = ref('')
 
 const formData = ref({
-  nom: '', // Mappé à 'noms' (Nom et Post-nom) ou 'fullname' de l'API
-  prenom: '', // Mappé à 'firstname' de l'API
-  email: '', // Mappé à 'email' de l'API
-  telephone: '', // Mappé à 'phoneNumber' de l'API
+  nom: '',
+  prenom: '',
+  email: '',
+  telephone: '',
   password: '',
   filiere: '',
   orientation: '',
-  avatar: ''
+  avatar: '',
+  gender: '' // --- CORRECTION ---: Ajout du champ pour stocker le genre normalisé
 })
 
 // --- Règles de Validation ---
@@ -250,7 +253,6 @@ const rules = {
 
 // --- Propriétés Calculées ---
 const canSubmit = computed(() => {
-  // Vérifie la validité des champs requis avant de permettre la soumission
   return formData.value.nom &&
     formData.value.prenom &&
     formData.value.email &&
@@ -262,9 +264,24 @@ const canSubmit = computed(() => {
 
 // --- Fonctions ---
 
+// --- CORRECTION ---: Ajout d'une fonction pour normaliser le genre
+/**
+ * Transforme "Masculin" en "M" et "Féminin" en "F".
+ * @param genderString Le genre tel que reçu de l'API Akhademie
+ */
+const normalizeGender = (genderString: string | null | undefined): string => {
+  if (!genderString) return '';
+  const lowerGender = genderString.toLowerCase();
+  
+  if (lowerGender.startsWith('m') || lowerGender === 'masculin') return 'M';
+  if (lowerGender.startsWith('f') || lowerGender === 'féminin') return 'F';
+  
+  // Retourne le premier caractère si inconnu, ou une chaîne vide
+  return genderString.charAt(0).toUpperCase() || '';
+}
+
 /**
  * Récupère les données de l'étudiant via l'API Akhademie.
- * CORRECTION: Accède à response.data.data pour récupérer les informations.
  */
 const fetchAkhademieData = async () => {
   if (!matricule.value) return
@@ -278,26 +295,26 @@ const fetchAkhademieData = async () => {
       `https://akhademie.ucbukavu.ac.cd/api/v1/school-students/read-by-matricule?matricule=${encodeURIComponent(matricule.value)}`
     )
 
-    // *** CORRECTION CLÉ ICI : Accéder à l'objet 'data' dans la réponse ***
     const studentData = response.data.data
 
     if (studentData) {
-      akhademieData.value = studentData // Stocke les données de l'étudiant
+      akhademieData.value = studentData 
 
-      // Mappage des champs du formulaire avec les données de l'API
-      formData.value.nom = studentData.noms || studentData.fullname || '' // 'noms' semble être Nom(s) et Post-nom
+      formData.value.nom = studentData.noms || studentData.fullname || ''
       formData.value.prenom = studentData.firstname || ''
-      // Pré-remplissage des contacts
       formData.value.email = studentData.email || ''
       formData.value.telephone = studentData.phoneNumber || ''
 
       formData.value.filiere = studentData.schoolFilieres?.shortName || ''
       formData.value.orientation = studentData.schoolOrientations?.title || ''
       formData.value.avatar = studentData.avatar || ''
+      
+      // --- CORRECTION ---: Normaliser le genre dès la récupération
+      // On vérifie les noms de champs possibles 'gender' ou 'sexe'
+      formData.value.gender = normalizeGender(studentData.gender || studentData.sexe);
 
       step.value = 2
     } else {
-      // Si la requête est un succès mais 'data' est null (pas d'étudiant trouvé)
       akhademieError.value = response.data.message || 'Aucune donnée trouvée pour ce matricule.'
     }
   } catch (error: any) {
@@ -316,15 +333,27 @@ const fetchAkhademieData = async () => {
  * Soumet les données pour l'inscription.
  */
 const submitRegistration = async () => {
-  // Vérifie d'abord les règles de validation locales (Vuetify form validation)
   const { valid } = await formRef.value.validate()
   if (!valid || !canSubmit.value) return
 
   submitting.value = true
   registrationError.value = ''
 
+  // --- CORRECTION ---:
+  // Modifie l'objet akhademieData *avant* de l'envoyer
+  // pour que le champ 'gender' soit correct.
+  if (akhademieData.value) {
+    // On s'assure que le champ 'gender' (ou 'sexe') dans l'objet
+    // qui sera envoyé au backend contient la valeur normalisée (M/F).
+    akhademieData.value.gender = formData.value.gender;
+    
+    // Si l'API Akhademie utilise 'sexe', on met à jour 'sexe' aussi
+    if ('sexe' in akhademieData.value) {
+         akhademieData.value.sexe = formData.value.gender;
+    }
+  }
+
   try {
-    // La fonction registerStudent est censée gérer la soumission vers api.php
     const result = await AuthService.registerStudent({
       matricule: matricule.value,
       nom: formData.value.nom,
@@ -332,7 +361,8 @@ const submitRegistration = async () => {
       email: formData.value.email,
       telephone: formData.value.telephone,
       password: formData.value.password,
-      akhademie_data: akhademieData.value // Envoi des données brutes de l'API pour l'enregistrement complet
+      // On envoie l'objet 'akhademie_data' maintenant corrigé
+      akhademie_data: akhademieData.value 
     })
 
     if (result.success) {
@@ -342,7 +372,9 @@ const submitRegistration = async () => {
     }
   } catch (error: any) {
     console.error("Erreur d'inscription:", error);
-    registrationError.value = 'Erreur: Impossible de créer le compte. ' + (error.message || 'Problème réseau/serveur.');
+    // Affiche l'erreur spécifique de la BDD si elle remonte
+    const serverMessage = error.response?.data?.message || error.message || 'Problème réseau/serveur.';
+    registrationError.value = 'Erreur: Impossible de créer le compte. ' + serverMessage;
   } finally {
     submitting.value = false
   }
@@ -356,7 +388,6 @@ const completeRegistration = () => {
 
   if (pendingScan) {
     const scanData = JSON.parse(pendingScan)
-    // Assurez-vous que cette route existe dans votre routeur
     router.push(`/scan?session_id=${scanData.session_id}&token=${scanData.token}`)
   } else {
     router.push('/login')
