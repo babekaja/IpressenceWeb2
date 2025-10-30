@@ -99,9 +99,7 @@ class PDFService {
         3: { cellWidth: 40 },
         4: { cellWidth: 40 }
       },
-      didDrawPage: (data) => {
-        // on peut rajouter pied de page si besoin (non intrusif)
-      }
+      
     })
 
     // lastAutoTable peut ne pas exister, on protège
