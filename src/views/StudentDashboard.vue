@@ -8,7 +8,6 @@
 
       <v-spacer />
 
-      <!-- AJOUTÉ: Bouton global pour ouvrir le scanner (de Fichier 1) -->
       <v-btn color="secondary" @click="openScannerDialog" class="mr-3">
         <v-icon left>mdi-qrcode-scan</v-icon>Scanner
       </v-btn>
@@ -20,7 +19,6 @@
 
     <v-main>
       <v-container>
-        <!-- Section Info (de Fichier 2) -->
         <v-row>
           <v-col cols="12">
             <v-card class="mb-6">
@@ -33,7 +31,6 @@
           </v-col>
         </v-row>
 
-        <!-- Sections Stats & Actions (de Fichier 2) -->
         <v-row>
           <v-col cols="12" md="6">
             <v-card>
@@ -64,7 +61,6 @@
                 <p class="text-body-2 mb-3">
                   Scannez un QR code de session pour enregistrer votre présence
                 </p>
-                <!-- AJOUTÉ: Affiche le QR scanné s'il existe -->
                 <div v-if="qrUrl" class="mb-3">
                   <strong>Dernier QR scanné :</strong>
                   <div style="word-break:break-all">{{ qrUrl }}</div>
@@ -77,7 +73,6 @@
           </v-col>
         </v-row>
 
-        <!-- Historique des Présences (de Fichier 2) -->
         <v-row>
           <v-col cols="12">
             <v-card>
@@ -119,7 +114,6 @@
       </v-container>
     </v-main>
 
-    <!-- AJOUTÉ: Scanner dialog (modal) (de Fichier 1) -->
     <v-dialog v-model="scannerDialog" persistent width="900">
       <v-card>
         <v-toolbar flat>
@@ -132,32 +126,13 @@
         <v-card-text>
           <v-row>
             <v-col cols="12" md="4">
-              <!-- Liste des caméras (ne provoque PAS de popup) -->
-              <v-select
-                v-model="selectedDeviceId"
-                :items="cameraDevices"
-                item-title="label"
-                item-value="deviceId"
-                label="Caméra"
-                dense
-                :loading="loadingDevices"
-                hide-details
-              />
-
               <div class="mt-3">
-                <!-- LANCER est le moment où on demande la permission -->
                 <v-btn color="success" @click="requestAndStart" :loading="loadingPermission || scannerRunning" :disabled="scannerRunning">
                   <v-icon left>mdi-camera</v-icon>Lancer la caméra
                 </v-btn>
 
                 <v-btn color="error" @click="stopScanner" class="ml-2" :disabled="!scannerRunning">
                   <v-icon left>mdi-camera-off</v-icon>Arrêter
-                </v-btn>
-              </div>
-
-              <div class="mt-4">
-                <v-btn small color="primary" @click="refreshDevices" :loading="loadingDevices">
-                  <v-icon left>mdi-refresh</v-icon>Rafraîchir caméras
                 </v-btn>
               </div>
 
@@ -169,12 +144,10 @@
             </v-col>
 
             <v-col cols="12" md="8">
-              <!-- preview video (apparaît seulement si permission accordée et previewActive true) -->
               <div v-if="previewActive" class="preview-wrap mb-2">
                 <video ref="videoEl" autoplay playsinline muted style="width:100%; height:360px; object-fit:cover; border-radius:6px;"></video>
               </div>
 
-              <!-- html5-qrcode container (fallback) -->
               <div id="qr-reader" ref="qrReaderEl" style="width:100%; height:360px; background:#000; border-radius:6px; display:flex;align-items:center;justify-content:center">
                 <div v-if="!scannerRunning && !permissionMessage" style="color:#fff">Scanner inactif</div>
               </div>
@@ -192,7 +165,6 @@
       </v-card>
     </v-dialog>
 
-
     <v-snackbar v-model="snackbar.show" :color="snackbar.color">
       {{ snackbar.text }}
     </v-snackbar>
@@ -200,15 +172,14 @@
 </template>
 
 <script setup lang="ts">
-// AJOUTÉ: Imports de Fichier 1 (nextTick, onBeforeUnmount)
+// 3. IMPORTS MIS À JOUR
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import AuthService from '../services/auth.service'
 import AttendanceService, { type AttendanceRecord } from '../services/attendance.service'
 
-/* ---------- AJOUTÉ: error helper (de Fichier 1) ---------- */
+// 4. FONCTION HELPER POUR LES ERREURS (AJOUTÉE)
 type ErrorInfo = { message: string; name?: string }
-
 function getErrorInfo(err: unknown): ErrorInfo {
   if (err == null) return { message: String(err) }
   if (err instanceof Error) return { message: err.message, name: err.name }
@@ -226,12 +197,12 @@ function getErrorInfo(err: unknown): ErrorInfo {
 }
 
 
-/* ---------- state (Fichier 2) ---------- */
+/* ---------- état (existant) ---------- */
 const router = useRouter()
 const user = ref<any>(null)
-// Note: Le type 'AttendanceRecord' vient de Fichier 2
 const myPresences = ref<AttendanceRecord[]>([])
 const loadingPresences = ref(false)
+
 const snackbar = ref({
   show: false,
   text: '',
@@ -243,12 +214,9 @@ const presenceHeaders = [
   { title: 'Date/Heure', key: 'date_heure' },
 ]
 
-/* ---------- AJOUTÉ: state (de Fichier 1) ---------- */
+/* ---------- 5. ÉTAT POUR LE SCANNER (AJOUTÉ) ---------- */
 const qrUrl = ref('')
 const checkingAttendance = ref(false)
-const lastError = ref('')
-
-/* AJOUTÉ: scanner dialog state (de Fichier 1) */
 const scannerDialog = ref(false)
 const autoSubmit = ref(false)
 const qrReaderEl = ref<HTMLElement | null>(null)
@@ -258,40 +226,16 @@ let scannerInstance: any = null
 const scannerRunning = ref(false)
 const previewActive = ref(false)
 const permissionMessage = ref('')
-const loadingDevices = ref(false)
+const lastError = ref('')
 const loadingPermission = ref(false)
-const cameraDevices = ref<Array<{ deviceId: string; label: string }>>([])
-const selectedDeviceId = ref<string | null>(null)
 
 
-/* ---------- MODIFIÉ: onMounted (Fusion de Fichier 1 & 2) ---------- */
-onMounted(async () => {
-  // Logique de Fichier 2
-  const currentUser = await AuthService.getCurrentUser()
-  if (!currentUser || currentUser.type !== 'student') {
-    router.push('/login')
-    return
-  }
-  user.value = currentUser
-  await loadMyPresences()
-
-  // AJOUTÉ: Logique de Fichier 1
-  // initial devices list (no permission popup)
-  await refreshDevices()
-})
-
-/* ---------- AJOUTÉ: onBeforeUnmount (de Fichier 1) ---------- */
-onBeforeUnmount(async () => {
-  try { await stopScanner(); await stopPreview() } catch (_) {}
-})
-
-
-/* ---------- helpers (Fichier 2) ---------- */
-const showSnackbar = (text: string, color = 'success') => {
+/* ---------- 6. NOUVELLES FONCTIONS HELPER (AJOUTÉES) ---------- */
+// (La fonction showSnackbar existait déjà et est compatible)
+const showSnackbar = (text: string, color: string) => {
   snackbar.value = { show: true, text, color }
 }
 
-/* ---------- AJOUTÉ: setLastError (de Fichier 1) ---------- */
 function setLastError(err: unknown) {
   const info = getErrorInfo(err)
   lastError.value = info.message
@@ -300,33 +244,8 @@ function setLastError(err: unknown) {
   console.debug('ErrorInfo:', info)
 }
 
-/* ---------- AJOUTÉ: camera & devices (de Fichier 1) ---------- */
-const refreshDevices = async () => {
-  loadingDevices.value = true
-  permissionMessage.value = ''
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-      permissionMessage.value = "navigator.mediaDevices.enumerateDevices() non supporté."
-      cameraDevices.value = []
-      loadingDevices.value = false
-      return
-    }
+/* ---------- 7. TOUTE LA LOGIQUE DU SCANNER (AJOUTÉE) ---------- */
 
-    // We do NOT call getUserMedia() here — labels may be empty until permission
-    const devices = await navigator.mediaDevices.enumerateDevices()
-    const cams = devices
-      .filter(d => d.kind === 'videoinput')
-      .map(d => ({ deviceId: d.deviceId, label: d.label || `Caméra ${d.deviceId.slice(-4)}` }))
-    cameraDevices.value = cams
-    if (cams.length && !selectedDeviceId.value) selectedDeviceId.value = cams[0].deviceId
-  } catch (err: unknown) {
-    setLastError(err)
-    const info = getErrorInfo(err)
-    permissionMessage.value = 'Impossible de lister les caméras : ' + info.message
-  } finally { loadingDevices.value = false }
-}
-
-/* ---------- AJOUTÉ: preview & scanner (de Fichier 1) ---------- */
 async function stopPreview() {
   try {
     if (localStream) {
@@ -340,12 +259,11 @@ async function stopPreview() {
   }
 }
 
-async function startPreviewForDevice(deviceId: string) {
+async function startPreviewForDevice() {
   await stopPreview()
   loadingPermission.value = true
   try {
-    // this request WILL trigger the browser permission popup
-    const constraints: MediaStreamConstraints = { video: { deviceId: { exact: deviceId } } }
+    const constraints: MediaStreamConstraints = { video: { facingMode: 'environment' } }
     localStream = await navigator.mediaDevices.getUserMedia(constraints)
     if (videoEl.value) {
       videoEl.value.srcObject = localStream
@@ -367,20 +285,18 @@ async function startPreviewForDevice(deviceId: string) {
 }
 
 const requestAndStart = async () => {
-  if (!selectedDeviceId.value) { permissionMessage.value = 'Sélectionne une caméra.'; return }
   permissionMessage.value = ''
   lastError.value = ''
   try {
-    // explicit permission request here
-    await startPreviewForDevice(selectedDeviceId.value)
+    await startPreviewForDevice()
   } catch (_err) {
-    return // message already set inside startPreviewForDevice
+    return // Le message d'erreur est déjà défini
   }
   await nextTick()
-  await startScanner(selectedDeviceId.value)
+  await startScanner()
 }
 
-const startScanner = async (deviceId: string) => {
+const startScanner = async () => {
   if (scannerRunning.value) return
   if (!qrReaderEl.value) { permissionMessage.value = 'Container scanner introuvable'; return }
   try {
@@ -392,7 +308,7 @@ const startScanner = async (deviceId: string) => {
 
     if (!qrReaderEl.value.id) qrReaderEl.value.id = 'qr-reader'
     scannerInstance = new Html5Qrcode(qrReaderEl.value.id)
-    const cameraConfig = { deviceId: { exact: deviceId } }
+    const cameraConfig = { facingMode: "environment" }
     const config = { fps: 10, qrbox: 250 }
 
     await scannerInstance.start(
@@ -403,10 +319,9 @@ const startScanner = async (deviceId: string) => {
         showSnackbar('QR Code détecté !', 'success')
         if (autoSubmit.value) {
           try {
-            // ADAPTÉ: Appelle checkAttendance() qui est maintenant fusionné
-            await checkAttendance()
+            await checkAttendance() // Appel de la fonction adaptée
           } catch (e) {
-            // nothing special — checkAttendance handles errors
+            // rien de spécial — checkAttendance gère ses propres erreurs
           }
           await stopScanner()
           await stopPreview()
@@ -437,73 +352,70 @@ const stopScanner = async () => {
   scannerRunning.value = false
 }
 
-/* ---------- AJOUTÉ/ADAPTÉ: attendance & data (Fusion) ---------- */
+
+/* ---------- 8. FONCTION 'checkAttendance' (MISE À JOUR) ---------- */
 const checkAttendance = async () => {
   if (!qrUrl.value || !user.value) return
+
+  // 1. Vérifier que l'objet user a bien un 'id' numérique
+  if (!user.value.id || typeof user.value.id !== 'number') {
+    showSnackbar('ID de l\'utilisateur (numérique) non trouvé.', 'error')
+    return
+  }
+  const studentId = user.value.id
+
   checkingAttendance.value = true
   try {
+    // 2. Parser l'URL du QR code
     const url = new URL(qrUrl.value)
-    const sessionId = url.searchParams.get('session_id')
+    const sessionIdStr = url.searchParams.get('session_id')
     const token = url.searchParams.get('token')
 
-    if (!sessionId || !token) {
-      showSnackbar('QR Code invalide', 'error')
-      checkingAttendance.value = false // Arrêter le chargement
+    if (!sessionIdStr || !token) {
+      showSnackbar('QR Code invalide (session_id ou token manquant)', 'error')
+      checkingAttendance.value = false
       return
     }
 
-    // --- NOTE D'ADAPTATION ---
-    // J'utilise AttendanceService (de Fichier 2) au lieu de ApiService (de Fichier 1)
-    // J'ai supposé que le service a une méthode `checkIn` qui prend le matricule.
-    // (Le matricule est disponible dans user.value selon le template de Fichier 2)
-    const response = await AttendanceService.checkIn({
-      matricule: user.value.matricule,
-      session_id: sessionId,
-      token: token
-    })
+    // 3. ÉTAPE 1: Valider la session d'abord
+    const validation = await AttendanceService.validateSession(sessionIdStr, token)
 
-    // La logique de succès est celle de Fichier 1
-    if (response.status === 'success') {
+    // Si la session est invalide ou expirée
+    if (!validation.valid || !validation.session) {
+      showSnackbar(validation.error || 'Session invalide ou expirée', 'error')
+      checkingAttendance.value = false
+      return
+    }
+
+    // 4. ÉTAPE 2: Si valide, enregistrer la présence (avec les 2 arguments)
+    // On utilise l'ID numérique de la session retourné par la validation
+    const sessionIdNum = validation.session.id
+    const response = await AttendanceService.recordAttendance(studentId, sessionIdNum);
+
+    if (response.success) {
       showSnackbar('Présence enregistrée!', 'success')
       qrUrl.value = ''
-      loadMyPresences() // Cette fonction existe déjà dans Fichier 2!
+      loadMyPresences() // Recharge l'historique
     } else {
-      showSnackbar(response.message || 'Erreur enregistrement', 'error')
+      // Gère les erreurs spécifiques (ex: "déjà enregistré")
+      showSnackbar(response.error || 'Erreur enregistrement', 'error')
     }
+
   } catch (err: unknown) {
-    setLastError(err) // Helper de Fichier 1
-    const info = getErrorInfo(err) // Helper de Fichier 1
-    showSnackbar('Erreur enregistrement: ' + info.message, 'error')
+    setLastError(err) // La fonction setLastError existe déjà
+    const info = getErrorInfo(err)
+    showSnackbar('Erreur: ' + info.message, 'error')
   } finally {
     checkingAttendance.value = false
   }
 }
 
 
-/* ---------- other features (Fichier 2) ---------- */
-const loadMyPresences = async () => {
-  if (!user.value) return
-
-  loadingPresences.value = true
-  try {
-    // Utilise AttendanceService de Fichier 2
-    const data = await AttendanceService.getStudentAttendance(user.value.id)
-    myPresences.value = data
-  } catch (error: any) {
-    console.error('Erreur de chargement des présences:', error)
-    showSnackbar('Erreur lors du chargement de l\'historique', 'error')
-  } finally {
-    loadingPresences.value = false
-  }
-}
-
-/* ---------- AJOUTÉ: dialog control (de Fichier 1) ---------- */
+/* ---------- 9. CONTRÔLE DU DIALOG (AJOUTÉ) ---------- */
 const openScannerDialog = async () => {
   scannerDialog.value = true
   await nextTick()
   if (qrReaderEl.value && !qrReaderEl.value.id) qrReaderEl.value.id = 'qr-reader'
-  // refresh device list WITHOUT asking permission
-  await refreshDevices()
 }
 
 const closeScannerDialog = async () => {
@@ -521,7 +433,38 @@ const confirmAndClose = async () => {
 }
 
 
-/* ---------- misc (Fichier 2) ---------- */
+/* ---------- FONCTIONS EXISTANTES (conservées) ---------- */
+
+onMounted(async () => {
+  const currentUser = await AuthService.getCurrentUser()
+  if (!currentUser || currentUser.type !== 'student') {
+    router.push('/login')
+    return
+  }
+  user.value = currentUser
+  await loadMyPresences()
+})
+
+// 10. HOOK DE CYCLE DE VIE (AJOUTÉ)
+onBeforeUnmount(async () => {
+  try { await stopScanner(); await stopPreview() } catch (_) {}
+})
+
+const loadMyPresences = async () => {
+  if (!user.value) return
+
+  loadingPresences.value = true
+  try {
+    const data = await AttendanceService.getStudentAttendance(user.value.id)
+    myPresences.value = data
+  } catch (error: any) {
+    console.error('Erreur de chargement des présences:', error)
+    showSnackbar('Erreur lors du chargement de l\'historique', 'error')
+  } finally {
+    loadingPresences.value = false
+  }
+}
+
 const formatDateTime = (dateTime: string) => {
   return new Date(dateTime).toLocaleString('fr-FR')
 }
@@ -532,7 +475,6 @@ const logout = () => {
 }
 </script>
 
-<!-- AJOUTÉ: Style (de Fichier 1) -->
 <style scoped>
 .preview-wrap video { width:100%; height:100%; object-fit:cover; border-radius:6px; }
 .qr-box { border-radius:6px; overflow:hidden; min-height:260px; background:#000; display:flex; align-items:center; justify-content:center; }
