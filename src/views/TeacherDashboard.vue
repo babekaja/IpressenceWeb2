@@ -214,7 +214,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-
+import QRCode from 'qrcode'
 import AuthService from '../services/auth.service'
 import AttendanceService, { type AttendanceRecord } from '../services/attendance.service'
 import PDFService from '../services/pdf.service'
